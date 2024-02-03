@@ -3,6 +3,7 @@ Simple discord bot for afk kontrol (with funny voice message) (only CZ)
 Jednoduchý bot co měí jak dlouho uživatelé byli v afk a dovoluje komunikaci přez něj zkrze příkazy.
 
 Soubory obv neobsahují private klíč. ten si musíte pořídit svůj na discord dev portálu.
+A poté doplinit do souborů. (řádek 56 & app id do řídku 57)
 
 příkazy:
 
