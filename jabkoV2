@@ -53,8 +53,8 @@ const client = new Client({
 });
 
 /* SYSTEM INFO*/
-let token = "OTMzODI5OTk4MTA2Nzc1NjQz.G8obgB.7N4ussfE-J-1DWMMI_oNSjm7KV8LrDjmpNsSqU";
-let appID = "933829998106775643";
+let token = /*DOPLNIT*/
+let appID = /*DOPLNIT*/;
 
 
 /*-------------------------------------------------------------------------------------------------*/
