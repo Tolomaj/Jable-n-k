@@ -10,7 +10,7 @@ příkazy:
 /jabsay -> řekne do kanálu ve kterém je připojený zrávu \
 /japsay_enable [true/false] -> zakáže / povolí jabsaj (člověk musí mít roli moštař jinak neposlechne) \
 /stats -> ukáže statistiky \
-/best -> ukáže nejvíce afk aktivní lidi \
+/best -> ukáže nejvíce afk aktivní lidi
 
 souštět pomocí node.js
 
