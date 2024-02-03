@@ -1,0 +1,476 @@
+const { Client, Collection, Events, GatewayIntentBits, Partials, Routes ,REST, EmbedBuilder ,ChannelType} = require("discord.js");
+const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus } = require('@discordjs/voice');
+const { SlashCommandBuilder, ContextMenuCommandBuilder } = require("@discordjs/builders");
+const { getAudioUrl } = require('google-tts-api');
+const Sequelize = require('sequelize');
+
+const sequelize = new Sequelize('database', 'user', 'password', {
+	host: 'localhost',
+	dialect: 'sqlite',
+	logging: false,
+	// SQLite only
+	storage: 'database.sqlite',
+});
+
+sequelize.authenticate().then(() => {
+  console.log('Connection has been established successfully.');
+}).catch((error) => {
+  console.error('Unable to connect to the database: ', error);
+});
+
+const DiscordsServersData = sequelize.define('DiscordsServersData', {
+	serverID: { type: Sequelize.TEXT, unique: true, },
+  jabkovateID: Sequelize.TEXT,                 // ID mimikovaneho uživatele
+  conection:   Sequelize.INTEGER,                 // pointer v mapě připojení
+  jabsay:     Sequelize.BOOLEAN,                  // povolený příkaz jabsay
+  vAFKU:      Sequelize.ARRAY(Sequelize.TEXT), // lidi v AFKu                ??
+  zAFKU:      Sequelize.ARRAY(Sequelize.TEXT), // od kud lidi do afku přišli ??
+  active:   Sequelize.ARRAY(Sequelize.TEXT), // lidi co někdy byli v akfu na serveru    ??
+});
+
+const UserStats = sequelize.define('UserStats', {
+	userID: { type: Sequelize.TEXT, unique: true, },
+  pocekAFKU: Sequelize.INTEGER,                       // kolikrát šel do afku
+  pocekAFKUsam: Sequelize.INTEGER,                       // kolikrát šel do afku sám
+  pocekOdchoduMeziLidmi: Sequelize.INTEGER,                       // kolikrát šel do afku sám
+  casAFKU:   Sequelize.DATE,                       // kolik času strávil v afku
+  posledniPripojeniAFKu: Sequelize.DATE,              //kdy se připojil do afku
+});
+
+const Vconections = new Map();
+
+sequelize.sync().then(() => {
+  console.log('Book table created successfully!');
+}).catch((error) => {
+  console.error('Unable to create table : ', error);
+});
+
+//sequelize.drop();
+const client = new Client({
+  intents: [GatewayIntentBits.AutoModerationConfiguration, GatewayIntentBits.AutoModerationExecution, GatewayIntentBits.DirectMessageReactions, GatewayIntentBits.DirectMessageTyping, GatewayIntentBits.DirectMessages, GatewayIntentBits.GuildEmojisAndStickers, GatewayIntentBits.GuildIntegrations, GatewayIntentBits.GuildInvites, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildMessageReactions, GatewayIntentBits.GuildMessageTyping, GatewayIntentBits.GuildMessages, GatewayIntentBits.GuildModeration, GatewayIntentBits.GuildPresences, GatewayIntentBits.GuildScheduledEvents, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.GuildWebhooks, GatewayIntentBits.Guilds, GatewayIntentBits.MessageContent],
+  partials: [Partials.Message, Partials.Channel, Partials.GuildMember, Partials.Reaction, Partials.GuildScheduledEvent, Partials.User, Partials.ThreadMember],
+  shards: "auto"
+});
+
+/* SYSTEM INFO*/
+let token = "OTMzODI5OTk4MTA2Nzc1NjQz.G8obgB.7N4ussfE-J-1DWMMI_oNSjm7KV8LrDjmpNsSqU";
+let appID = "933829998106775643";
+
+
+/*-------------------------------------------------------------------------------------------------*/
+/*---------------------------------------- Podpurne Funkce ----------------------------------------*/
+/*-------------------------------------------------------------------------------------------------*/
+
+async function changeNickName(guild,nickname) {
+  var botMember = await guild.members.fetch(client.user.id);
+  botMember.setNickname(nickname);
+};
+
+
+function odpoj(guild,INserverID){
+  connection = Vconections.get(INserverID);
+  changeNickName(guild,"Jablečník🍏");  
+  if(connection != null){
+      connection.destroy();
+      connection = null;
+  }
+  Vconections.set(INserverID,null);
+}
+
+
+// variable that holds commands 
+client.commands = new Collection();
+
+// loader function
+function addCommand(command){ client.commands.set(command.data.name, command); }
+
+/*-------------------------------------------------------------------------------------------------*/
+/*----------------------------------------- Adds commands -----------------------------------------*/
+/*-------------------------------------------------------------------------------------------------*/
+addCommand({
+  data: new SlashCommandBuilder()
+      .setName("stats")
+      .setDescription("Ukáže ti tvoje statistiky")
+      .addBooleanOption(option => option.setName('pošeptání')
+        .setDescription('Pokus se stydíš tak můžeš botu nastavit aby ti pouze pošeptal jak neaktivním členem jsi byl ;)')),
+    async execute(interaction) {
+      var user = await UserStats.findOne({ where: { userID: interaction.user.id } });
+
+      if(user){
+        const banerik = new EmbedBuilder()
+        .setColor(0x0099FF)
+        .setTitle('Statistika AFKu')
+        .setThumbnail(interaction.user.avatarURL({ dynamic:true }))
+        .addFields( { name: 'Počet AFKů', value: user.pocekAFKU.toString() , inline: true}, { name: 'zabitý čas', value: (user.casAFKU.getTime()/1000).toFixed(1).toString()+"ms", inline: true }, )
+        
+        console.log(interaction.options);
+
+        if(interaction.options.getBoolean('pošeptání') ?? false){
+          await interaction.reply({ embeds: [banerik] , ephemeral: true});     
+        }else{
+          await interaction.reply({ embeds: [banerik] });
+        }
+        
+      }else{
+        await interaction.reply("Nemáš žádný záznam! T_T");
+      }
+
+    },
+});
+
+addCommand({
+  addminCommand: true,
+  data: new SlashCommandBuilder()
+      .setName("changelog")
+      .setDescription("Poslední změny lmao."),
+    async execute(interaction) {
+      await interaction.reply('Přidáno napovídání, statistiky a rožšíření pro multiservrovou podporu. v1.2 (HOPE_FINAL).');
+    },
+});
+
+addCommand({
+  addminCommand: true,
+  data: new SlashCommandBuilder()
+      .setName("mezinas")
+      .setDescription("Přivolá jablečníka do jeho přirozeného prostředí AFK kanálu.(pak si ho přesun)")
+      .addChannelOption(option => option
+        .setName('channel')
+        .setDescription('cílový chanel jablečníka')
+        .addChannelTypes(ChannelType.GuildVoice)
+    ),
+    async execute(interaction) {
+      if(interaction.options.getChannel('channel')){
+        var chanel = interaction.options.getChannel('channel').id ;
+      }else{
+        var chanel = interaction.guild.afkChannelId;
+      }
+
+      var server = await DiscordsServersData.findOne({ where: { serverID: interaction.guild.id } });
+
+      // už je někde připojený
+      if(Vconections.get(chanel)){
+        await interaction.reply('Momentálně jsem zaneprázdněný v ' + connection.VoiceChannel + ' omluvuju se.');
+        return;
+      }
+
+      connection = joinVoiceChannel({channelId: chanel, guildId: interaction.guild.id, adapterCreator: interaction.guild.voiceAdapterCreator,selfDeaf: false,selfMute: false});
+      Vconections.set(chanel,connection);
+      await interaction.reply({content:'Už běžím.' , ephemeral: true});
+    },
+});
+
+addCommand({
+  addminCommand: true,
+  data: new SlashCommandBuilder()
+      .setName("upaluj")
+      .setDescription("Odvoláš jablečníka."),
+    async execute(interaction) {
+      odpoj(interaction.guild,interaction.guild.id);
+      await interaction.reply({content:'Už běžím.' , ephemeral: true});
+    },
+});
+
+addCommand({
+  addminCommand: true,
+  data: new SlashCommandBuilder()
+      .setName("best")
+      .setDescription("Ukáže stupně největších povalečů na tohoto serveru."),
+    async execute(interaction) {
+      //vezmeme všechny lidi na serveru
+      const members = await interaction.guild.members.fetch();
+      var map = new Map();
+
+      // vyfiltrujeme jen ty co reálně byli někdy v AFK kanále
+      for (var [key, value] of members) {
+        var user = await UserStats.findOne({ where: { userID: key } });
+        if(user){
+          map.set(key,user.casAFKU.getTime());
+        }
+      }
+      
+      // seřadíme od nejvetšího a odřízneme místa 4 a dál
+      const mapSort1 = [...map.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3);
+
+      await interaction.reply({content:'Stupně největších povalečů tad jsou následující:'});
+      for (let i = 0; i < 3; i++) {
+        // není dostatek soutěžících na první 3 příčky
+        if(mapSort1[i] == undefined){ break; }
+
+        var member = members.get(mapSort1[i][0]);
+        const banerik = new EmbedBuilder()
+          .setColor(0x0099FF)
+          .setTitle('#' + (i + 1)+ ' První místo patří: ' + member.user.globalName)
+          .setThumbnail(member.user.avatarURL())
+          .addFields( { name: 'Který propálil v AFKu celích : ', value: (mapSort1[i][1]/1000).toFixed(2).toString() + " sekund" } )
+          .setTimestamp()
+        await interaction.channel.send({ embeds: [banerik] });
+      }
+      
+    },
+});
+
+addCommand({
+  addminCommand: true,
+  data: new SlashCommandBuilder()
+      .setName("enable_jabsay")
+      .setDescription("Nastavení jestli bot přijímá na tomto serveru příkaz /jabsay.")
+      .addBooleanOption(option => option.setName('povolit').setDescription('true -> povoleno všem : false -> zakázano na celém serveru pro všechny').setRequired(true)),
+    async execute(interaction) {
+      var server = await DiscordsServersData.findOne({ where: { serverID: interaction.guild.id } });
+      var jabsay = interaction.options.getBoolean('pošeptání') ?? true;
+
+      server.update({ jabsay: jabsay});
+
+      if(jabsay){
+        await interaction.reply({content:'Jabsay bylo zapnuto' , ephemeral: true});
+      }else{
+        await interaction.reply({content:'Jabsay bylo vypnuto' , ephemeral: true});
+      }
+
+    },
+});
+
+addCommand({
+  data: new SlashCommandBuilder()
+      .setName("jabsay")
+      .setDescription("Jablečník rád vyřídí jakoukoli správu tvým bratrům ve zbrani tak mu ji jen svěř.")
+      .addStringOption(option => option.setName('zpráva') .setDescription('Vaše správa k poslání. či k posrání XD ?').setRequired(true)),
+    async execute(interaction) {
+      var jabsay_msg = interaction.options.getString('zpráva') ?? "";
+
+      // ošetření chyb
+      var server = await DiscordsServersData.findOne({ where: { serverID: interaction.guild.id } });
+      if(!server.jabsay){ interaction.reply("Příkaz jabsay není zapnutý. \nKontaktujte Moštaře."); return;}
+      var conection = Vconections.get(interaction.guild.id)
+      if(conection == null){interaction.reply("A kam to mám jako moštnout?"); return;}
+
+      const audioURL = getAudioUrl(jabsay_msg, {
+        lang: 'cs',
+        slow: false,
+        host: 'https://translate.google.com',
+        timeout: 10000,
+      });
+      
+      const resource = createAudioResource(audioURL);
+      const player = createAudioPlayer();
+      conection.subscribe(player);
+      player.play(resource);
+
+      const array = ["Tvá zpráva se přehrává. Bratři určitě dychtivě naslouchají tvým slovům.", "Oke.", "Jasné.", "Už to běžím doručit.","Ihned tam s tím jsem", "Rozkaz šéfe"];
+      await interaction.reply({content:array[Math.floor(Math.random() * array.length)] , ephemeral: true});
+    },
+});
+
+
+/*-------------------------------------------------------------------------------------------------*/
+/*-------------------------------------- POdpojovací funkce ---------------------------------------*/
+/*-------------------------------------------------------------------------------------------------*/
+client.on('voiceStateUpdate', async (oldMember, newMember) => {
+
+  var userID = oldMember.id;
+
+  // ignoruje svoje odpojování
+  if(userID == client.user.id){ return; }
+
+  if(oldMember.channelId != null && oldMember.channelId != undefined){
+    var OUTserverID = oldMember.channel.guild.id ;
+    var OUTserverAFK = oldMember.channel.guild.afkChannelId;
+    var OUTchannelID = oldMember.channel.id ;
+  }else{
+    var OUTserverID = null;
+    var OUTserverAFK = null;
+    var OUTchannelID = null;
+  }
+
+  if(newMember.channelId != null && newMember.channelId != undefined){
+    var INserverID = newMember.channel.guild.id ;
+    var INserverAFK = newMember.channel.guild.afkChannelId;
+    var INchannelID = newMember.channel.id ;
+  }else{
+    var INserverAFK = null;
+    var INserverID = null;
+    var INchannelID = null;
+  }
+
+  // mezi kanály co nejsou afk (ignorujeme)
+  // ------- mimo -> neafk ------------------------------    ---------------------   neafk -> mimo   ------------     ----------------------- neafk -> neafk ---------------------
+  if(OUTchannelID == null && (INchannelID != INserverAFK) || (OUTchannelID != OUTserverAFK) && INchannelID == null || (OUTchannelID != OUTserverAFK) && (INchannelID != INserverAFK)){
+    console.log(oldMember.member.displayName, " -> ", "mezi kanály");
+    return;
+  }
+
+  const d = new Date();
+
+  // při odpojování nebo pipojování muže dojít k tomu že server je 0
+  var serverID = INserverID ?? OUTserverID;
+
+  // vyhledáme server (popřípadě vyrobíme)
+  var server = await DiscordsServersData.findOne({ where: { serverID: serverID } });
+  if(!server){
+    console.log("Server neznáme vytváříme databázi.");
+    server = await DiscordsServersData.create({
+      serverID: INserverID,
+      jabkovateID: null,
+      conection:   null,
+      jabsay:      true,
+    });
+  }
+
+  // vyhledáme uživatele (popřípadě vyrobíme)
+  var user = await UserStats.findOne({ where: { userID: userID } });
+  if(!user){
+    console.log("Užvatel se ukázal poprvé vytváříme databázi.");
+    user = await UserStats.create({
+      userID: userID,
+      pocekAFKU: 0,  
+      pocekAFKUsam: 0,  //TODO zkontolovat jesli afk je prázdný          
+      casAFKU:   0,
+      posledniPripojeniAFKu: null,
+    });
+  }
+
+  
+
+  // když se připojí do afk a je v databázi (pokud není vytvořit a stejné kroky)
+    //- zapsat čas kdy přišel
+    //- přidat počet afk
+    //- přidat do fronty na serveru
+    //- vložit jablečníka
+  if((OUTchannelID != OUTserverAFK || OUTchannelID == null ) && INchannelID == INserverAFK){
+    console.log(oldMember.member.displayName, " -> ", "šel do afk");
+
+    // aktualizujume hodnoty uživatele v databázi
+    user.increment('pocekAFKU');
+    user.update({ posledniPripojeniAFKu: d.getTime()})
+
+    //change nickname
+    var nickname = oldMember.member.nickname;
+    if (nickname == null) {  nickname = oldMember.member.user.username; }
+    changeNickName(newMember.guild,nickname);
+
+    // connect to channel
+    connection = joinVoiceChannel({channelId: oldMember.channelId, guildId: newMember.guild.id, adapterCreator: newMember.guild.voiceAdapterCreator,selfDeaf: false,selfMute: false});
+
+    // generate voice message
+    var message = nickname + " zjablečněl."
+    const audioURL = getAudioUrl(message, { lang: 'cs', slow: false, host: 'https://translate.google.com', timeout: 10000, });
+
+    //play voice message
+    const resource = createAudioResource(audioURL);
+    const player = createAudioPlayer();
+    connection.subscribe(player);
+    player.play(resource);
+
+    // save sesion data
+    server.update({ jabkovateID: userID})
+    Vconections.set(INserverID,connection);
+
+    return;
+  }
+
+
+
+  // když se odpojí z afk a je v databázi
+    //- oddělat z server que (a pokud je ve frontě někdo jiný tak přepsat jméno)
+      //- pokud byl jediný v server que oddělat jablečníka jinak přejmenovat
+    //- přičíst afk čas a smazat kdy přišel do afku (pokud není null)
+  // když se odpojí ale není v databázi (neřešíme XD)
+  if((OUTchannelID == OUTserverAFK && INchannelID != INserverAFK) || (INserverID != OUTserverID && INserverID == null) ){
+    console.log(oldMember.member.displayName, " -> ", "šel z afk");
+
+    if(user && user.posledniPripojeniAFKu != null){
+      // pokud uživatel neexistuje pouze ho upravíme
+      user.update({ casAFKU: d.getTime() - user.posledniPripojeniAFKu})
+      user.update({ posledniPripojeniAFKu: null})
+    }
+
+    if(userID == server.jabkovateID && (Vconections.get(OUTserverID) != null)){ // odpojil se člověk z afk
+      console.log(oldMember.member.displayName, " -> ", "šel z afk");
+      odpoj(oldMember.channel.guild,OUTserverID); 
+    }
+
+    return;
+  }
+
+  
+
+  console.log("ERROR CASE -!!");
+/*
+
+*/
+
+  //OUTserverID -> server ze kterého uživatel přišel
+  //INserverID -> server na který uživatel přišel
+  //OUTchannelID -> chanel ze kterého uživatel přišel
+  //INchannelID -> chanel na který uživatel přišel
+
+
+  
+})
+
+/*-------------------------------------------------------------------------------------------------*/
+/*---------------------------------------- Handle commands ----------------------------------------*/
+/*-------------------------------------------------------------------------------------------------*/
+client.on(Events.InteractionCreate, async interaction => {
+	if (!interaction.isChatInputCommand()) return;
+	const command = interaction.client.commands.get(interaction.commandName);
+	if (!command) { console.error(`No command matching ${interaction.commandName} was found.`); return; }
+
+  if(command.addminCommand == true && !(interaction.member.roles.cache.some(role => role.name === 'Moštař')) ){
+    await interaction.reply({ content: 'Na práci s jablky ti chybí výuční list. Běž se vzdělávat!', ephemeral: true });
+    return;
+  }
+
+
+	try {
+		await command.execute(interaction);
+	} catch (error) {
+		console.error(error);
+		if (interaction.replied || interaction.deferred) {
+			await interaction.followUp({ content: 'Smutný příběh. Nefunkční moštovátko!', ephemeral: true });
+		} else {
+			await interaction.reply({ content: 'Smutný příběh. Nefunkční moštovátko!', ephemeral: true });
+		}
+	}
+});
+
+
+
+/*-------------------------------------------------------------------------------------------------*/
+/*---------------------------------------- Deploy commands ----------------------------------------*/
+/*-------------------------------------------------------------------------------------------------*/
+const rest = new REST().setToken(token);
+
+(async () => {
+	try {
+
+    // load from map to array for refreshing command snipet
+    const commands = [];
+    for (const [key, value] of client.commands) {
+      commands.push(value.data);
+    }
+
+		// The put method is used to fully refresh all commands in the guild with the current set
+		const data = await rest.put(
+			Routes.applicationCommands(appID),
+			{ body: commands },
+		);
+
+		console.log(`Successfully reloaded ${data.length} application (/) commands.`);
+	} catch (error) {
+		// And of course, make sure you catch and log any errors!
+		console.error(error);
+	}
+})();
+
+
+
+/*-------------------------------------------------------------------------------------------------*/
+/*------------------------------------------- Run client ------------------------------------------*/
+/*-------------------------------------------------------------------------------------------------*/
+client.on('ready', () => {
+  console.log('I am ready!');
+  client.user.setActivity("Naslouchám.", {type: 4})
+});
+
+client.login(token);
